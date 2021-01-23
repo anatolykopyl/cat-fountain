@@ -5,6 +5,8 @@ import importlib.util
 from threading import Thread
 import time
 
+from image import *
+
 IM_WIDTH = 1280
 IM_HEIGHT = 720
 
@@ -110,7 +112,11 @@ def pet_detector(frame, detection_time):
                 detection_time += 1
             else:
                 detection_time = 0
-            print(detection_time)   
+                no_cat()
+            print(detection_time)
+            if detection_time >= 2:
+                cat()   
+
 
     return frame, detection_time
 

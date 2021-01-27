@@ -3,20 +3,16 @@ import cv2
 import numpy as np
 import importlib.util
 from threading import Thread
+import RPi.GPIO as GPIO
 import time
 
 from image import *
-
-IM_WIDTH = 1280
-IM_HEIGHT = 720
-
-camera_type = 'usb'
+from pump import *
 
 MODEL_NAME = 'TFLite_model'
 PATH_TO_CKPT = os.path.join(os.getcwd(), MODEL_NAME, 'detect.tflite')
 PATH_TO_LABELS = os.path.join(os.getcwd(), MODEL_NAME, 'labelmap.txt')
 min_conf_threshold = 0.5
-NUM_CLASSES = 90
 
 # Import TensorFlow libraries
 # If tflite_runtime is installed, import interpreter from tflite_runtime, else import from regular tensorflow
@@ -89,7 +85,7 @@ class VideoStream:
 input_mean = 127.5
 input_std = 127.5
 
-def pet_detector(frame, detection_time):
+def pet_detector(frame, detection_time, cooldown):
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     frame_resized = cv2.resize(frame_rgb, (width, height))
     input_data = np.expand_dims(frame_resized, axis=0)
@@ -107,16 +103,20 @@ def pet_detector(frame, detection_time):
     for i in range(len(scores)):
         if ((scores[i] > min_conf_threshold) and (scores[i] <= 1.0)):
             obj_name = labels[int(classes[i])]
-            #print(obj_name)
             if obj_name == 'cat' or obj_name == 'teddy bear':
                 detection_time += 1
             else:
                 detection_time = 0
                 no_cat()
-            print(detection_time)
-            if detection_time >= 2:
-                cat()   
+                if (time.process_time() - cooldown > 5):
+                    switch_pump(False)
 
+            print('Looking at a cat for %s frames' % detection_time)
+
+            if detection_time >= 2:
+                cooldown = time.process_time()
+                cat()
+                switch_pump(True)
 
     return frame, detection_time
 
@@ -124,9 +124,10 @@ videostream = VideoStream(resolution=(resW, resH), framerate=30).start()
 time.sleep(1)
 
 detection_time = 0
+cooldown = 0
 while(True):
     frame = videostream.read()
-    frame, detection_time = pet_detector(frame, detection_time)
+    frame, detection_time = pet_detector(frame, detection_time, cooldown)
     cv2.imshow('Cat-detector', frame)
 
     if cv2.waitKey(1) == ord('q'):
